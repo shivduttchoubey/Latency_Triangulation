@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -45,6 +45,145 @@
       { name: "IIT Kharagpur", host: "https://144.16.192.1", location: [22.3149, 87.3105] },
       { name: "IIT Bombay", host: "https://10.119.2.10", location: [19.12, 72.91] },
       { name: "IIT Madras", host: "https://10.24.0.147", location: [12.9916, 80.2337] }
+    ];
+
+    const SPEED_OF_LIGHT = 200000; // Speed of light in fiber optics (km/s)
+
+    function haversine(lat1, lon1, lat2, lon2) {
+      const R = 6371; // Earth's radius in kilometers
+      const toRad = (deg) => (deg * Math.PI) / 180;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    async function measureLatency(url) {
+      try {
+        const start = performance.now();
+        await fetch(url, { method: "HEAD", cache: "no-store" });
+        const end = performance.now();
+        return end - start; // RTT in milliseconds
+      } catch (error) {
+        console.error(`Error measuring latency for ${url}:`, error);
+        return null;
+      }
+    }
+
+    function calculateDistance(latencyMs) {
+      const oneWayTimeSeconds = latencyMs / 1000 / 2; // RTT divided by 2
+      return oneWayTimeSeconds * SPEED_OF_LIGHT; // Distance in kilometers
+    }
+
+    function triangulateLocation(distances) {
+      let x = 0,
+        y = 0,
+        z = 0,
+        totalWeight = 0;
+
+      distances.forEach((distance, i) => {
+        if (distance > 0) {
+          const [lat, lon] = SERVERS[i].location;
+          const weight = 1 / distance;
+          const latRad = (lat * Math.PI) / 180;
+          const lonRad = (lon * Math.PI) / 180;
+
+          x += Math.cos(latRad) * Math.cos(lonRad) * weight;
+          y += Math.cos(latRad) * Math.sin(lonRad) * weight;
+          z += Math.sin(latRad) * weight;
+          totalWeight += weight;
+        }
+      });
+
+      x /= totalWeight;
+      y /= totalWeight;
+      z /= totalWeight;
+
+      const hyp = Math.sqrt(x ** 2 + y ** 2);
+      const lat = Math.atan2(z, hyp) * (180 / Math.PI);
+      const lon = Math.atan2(y, x) * (180 / Math.PI);
+      return [lat, lon];
+    }
+
+    async function main() {
+      const output = document.getElementById("results");
+      output.textContent = "Measuring latency to servers...\n";
+
+      const distances = await Promise.all(
+        SERVERS.map(async (server) => {
+          const latency = await measureLatency(server.host);
+          if (latency !== null) {
+            const distance = calculateDistance(latency);
+            output.textContent += `Server: ${server.name}, Latency: ${latency.toFixed(2)} ms, Distance: ${distance.toFixed(2)} km\n`;
+            return distance;
+          }
+          return Infinity;
+        })
+      );
+
+      const validDistances = distances.filter((d) => d < Infinity);
+      if (validDistances.length >= 2) {
+        const estimatedLocation = triangulateLocation(distances);
+        output.textContent += `\nEstimated Location: Latitude ${estimatedLocation[0].toFixed(6)}, Longitude ${estimatedLocation[1].toFixed(6)}\n`;
+      } else {
+        output.textContent += "\nNot enough valid distances for triangulation.\n";
+      }
+    }
+  </script>
+</body>
+</html> -->
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Network Latency Triangulation - Global</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f4f4f9;
+      color: #333;
+    }
+    h1 {
+      text-align: center;
+      color: #0078d7;
+    }
+    .output {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      max-width: 600px;
+      margin: 0 auto;
+      overflow-wrap: break-word;
+    }
+    pre {
+      font-family: monospace;
+      color: #0078d7;
+    }
+  </style>
+</head>
+<body>
+  <h1>Network Latency Triangulation - Global Servers</h1>
+  <p>Click the button below to start measuring latency and estimating your approximate location based on server responses.</p>
+  <button onclick="main()" style="display: block; margin: 20px auto; padding: 10px 20px; font-size: 16px; cursor: pointer;">Start Measurement</button>
+  <div class="output" id="output">
+    <strong>Output:</strong>
+    <pre id="results">Results will appear here...</pre>
+  </div>
+
+  <script>
+    const SERVERS = [
+      { name: "Amsterdam, NL (Interxion)", host: "https://208.69.35.1", location: [52.3676, 4.9041] },
+      { name: "Ashburn, US (Equinix)", host: "https://208.69.32.1", location: [39.0438, -77.4874] },
+      { name: "Atlanta, US (Digital Realty)", host: "https://146.112.137.1", location: [33.7490, -84.3880] }
     ];
 
     const SPEED_OF_LIGHT = 200000; // Speed of light in fiber optics (km/s)
