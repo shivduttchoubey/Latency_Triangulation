@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Network Latency Triangulation</title>
+  <title>Network Latency Triangulation - IITs</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -32,8 +32,8 @@
   </style>
 </head>
 <body>
-  <h1>Network Latency Triangulation</h1>
-  <p>Click the button below to start measuring latency and estimating your approximate location based on public servers.</p>
+  <h1>Network Latency Triangulation - IITs</h1>
+  <p>Click the button below to start measuring latency and estimating your approximate location based on IIT servers.</p>
   <button onclick="main()" style="display: block; margin: 20px auto; padding: 10px 20px; font-size: 16px; cursor: pointer;">Start Measurement</button>
   <div class="output" id="output">
     <strong>Output:</strong>
@@ -42,9 +42,9 @@
 
   <script>
     const SERVERS = [
-      { name: "Google US", host: "https://8.8.8.8", location: [37.3861, -122.0839] }, // Mountain View, California
-      { name: "Cloudflare UK", host: "https://144.16.192.1", location: [51.5074, -0.1278] }, // London, UK
-      { name: "Azure India", host: "https://www.microsoft.com", location: [19.0760, 72.8777] }, // Mumbai, India
+      { name: "IIT Kharagpur", host: "https://144.16.192.1", location: [22.3149, 87.3105] },
+      { name: "IIT Bombay", host: "https://10.119.2.10", location: [19.12, 72.91] },
+      { name: "IIT Madras", host: "https://10.24.0.147", location: [12.9916, 80.2337] }
     ];
 
     const SPEED_OF_LIGHT = 200000; // Speed of light in fiber optics (km/s)
