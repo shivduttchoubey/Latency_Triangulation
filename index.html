@@ -3,94 +3,74 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Network Latency Triangulation - IITs</title>
+  <title>Latency and Triangulation</title>
   <style>
     body {
       font-family: Arial, sans-serif;
+      line-height: 1.6;
       margin: 20px;
-      background-color: #f4f4f9;
-      color: #333;
+      padding: 0;
+      background: #f4f4f4;
     }
     h1 {
       text-align: center;
-      color: #0078d7;
     }
-    .output {
-      margin-top: 20px;
-      padding: 15px;
-      background-color: #fff;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    .server-container {
       max-width: 600px;
-      margin: 0 auto;
-      overflow-wrap: break-word;
+      margin: 20px auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     }
-    pre {
-      font-family: monospace;
-      color: #0078d7;
+    .server {
+      margin-bottom: 15px;
+    }
+    .results {
+      background: #e8f5e9;
+      padding: 15px;
+      border-radius: 5px;
     }
   </style>
 </head>
 <body>
-  <h1>Network Latency Triangulation - IITs</h1>
-  <p>Click the button below to start measuring latency and estimating your approximate location based on IIT servers.</p>
-  <button onclick="main()" style="display: block; margin: 20px auto; padding: 10px 20px; font-size: 16px; cursor: pointer;">Start Measurement</button>
-  <div class="output" id="output">
-    <strong>Output:</strong>
-    <pre id="results">Results will appear here...</pre>
+  <h1>Latency and Location Estimation</h1>
+  <div class="server-container" id="server-container">
+    <div id="loading">Measuring latency to servers...</div>
   </div>
 
   <script>
+    const SPEED_OF_LIGHT = 200000; // in km/s
+
     const SERVERS = [
-      { name: "IIT Kharagpur", host: "https://google.com", location: [22.3149, 87.3105] },
-      { name: "IIT Bombay", host: "https://microsoft.com", location: [19.12, 72.91] },
-      { name: "IIT Madras", host: "https://meta.com", location: [12.9916, 80.2337] }
-      // { name: "IIT Kharagpur", host: "https://144.16.192.1", location: [22.3149, 87.3105] },
-      // { name: "IIT Bombay", host: "https://10.119.2.10", location: [19.12, 72.91] },
-      // { name: "IIT Madras", host: "https://10.24.0.147", location: [12.9916, 80.2337] }
-    
+      { name: "IITKGP", host: "10.14.96.104", location: { lat: 22.3149, lon: 87.3105 } },
+      { name: "Google", host: "google.com", location: { lat: 37.390, lon: 122.08 } },
+      { name: "Azure India", host: "microsoft.com", location: { lat: 19.0760, lon: 72.8777 } },
     ];
 
-    const SPEED_OF_LIGHT = 200000; // Speed of light in fiber optics (km/s)
-
-    function haversine(lat1, lon1, lat2, lon2) {
-      const R = 6371; // Earth's radius in kilometers
-      const toRad = (deg) => (deg * Math.PI) / 180;
-      const dLat = toRad(lat2 - lat1);
-      const dLon = toRad(lon2 - lon1);
+    const haversine = (lat1, lon1, lat2, lon2) => {
+      const R = 6371.0; // Earth's radius in km
+      const toRadians = (deg) => (deg * Math.PI) / 180;
+      const dlat = toRadians(lat2 - lat1);
+      const dlon = toRadians(lon2 - lon1);
       const a =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+        Math.sin(dlat / 2) ** 2 +
+        Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dlon / 2) ** 2;
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       return R * c;
-    }
+    };
 
-    async function measureLatency(url) {
-      try {
-        const start = performance.now();
-        await fetch(url, { method: "HEAD", cache: "no-store" });
-        const end = performance.now();
-        return end - start; // RTT in milliseconds
-      } catch (error) {
-        console.error(`Error measuring latency for ${url}:`, error);
-        return null;
-      }
-    }
+    const calculateDistance = (latencyMs) => {
+      const latencySeconds = latencyMs / 1000 / 2;
+      return latencySeconds * SPEED_OF_LIGHT;
+    };
 
-    function calculateDistance(latencyMs) {
-      const oneWayTimeSeconds = latencyMs / 1000 / 2; // RTT divided by 2
-      return oneWayTimeSeconds * SPEED_OF_LIGHT; // Distance in kilometers
-    }
-
-    function triangulateLocation(distances) {
-      let x = 0,
-        y = 0,
-        z = 0,
-        totalWeight = 0;
+    const triangulateLocation = (distances) => {
+      let x = 0, y = 0, z = 0, totalWeight = 0;
 
       distances.forEach((distance, i) => {
         if (distance > 0) {
-          const [lat, lon] = SERVERS[i].location;
+          const { lat, lon } = SERVERS[i].location;
           const weight = 1 / distance;
           const latRad = (lat * Math.PI) / 180;
           const lonRad = (lon * Math.PI) / 180;
@@ -109,33 +89,69 @@
       const hyp = Math.sqrt(x ** 2 + y ** 2);
       const lat = Math.atan2(z, hyp) * (180 / Math.PI);
       const lon = Math.atan2(y, x) * (180 / Math.PI);
-      return [lat, lon];
-    }
+      return { lat, lon };
+    };
 
-    async function main() {
-      const output = document.getElementById("results");
-      output.textContent = "Measuring latency to servers...\n";
+    const measureLatency = async (host) => {
+      const start = performance.now();
+      try {
+        await fetch(`https://${host}`, { method: "HEAD", mode: "no-cors" });
+        const end = performance.now();
+        return end - start;
+      } catch {
+        return null;
+      }
+    };
+
+    const main = async () => {
+      const serverContainer = document.getElementById("server-container");
+      serverContainer.innerHTML = "";
 
       const distances = await Promise.all(
         SERVERS.map(async (server) => {
           const latency = await measureLatency(server.host);
           if (latency !== null) {
             const distance = calculateDistance(latency);
-            output.textContent += `Server: ${server.name}, Latency: ${latency.toFixed(2)} ms, Distance: ${distance.toFixed(2)} km\n`;
+            serverContainer.innerHTML += `
+              <div class="server">
+                <strong>Server:</strong> ${server.name}<br>
+                <strong>Latency:</strong> ${latency.toFixed(2)} ms<br>
+                <strong>Distance:</strong> ${distance.toFixed(2)} km
+              </div>
+            `;
             return distance;
+          } else {
+            serverContainer.innerHTML += `
+              <div class="server">
+                <strong>Server:</strong> ${server.name}<br>
+                <strong>Latency:</strong> Failed<br>
+                <strong>Distance:</strong> N/A
+              </div>
+            `;
+            return Infinity;
           }
-          return Infinity;
         })
       );
 
-      const validDistances = distances.filter((d) => d < Infinity);
-      if (validDistances.length >= 2) {
+      const reachable = distances.filter((d) => d < Infinity);
+      if (reachable.length >= 2) {
         const estimatedLocation = triangulateLocation(distances);
-        output.textContent += `\nEstimated Location: Latitude ${estimatedLocation[0].toFixed(6)}, Longitude ${estimatedLocation[1].toFixed(6)}\n`;
+        serverContainer.innerHTML += `
+          <div class="results">
+            <strong>Estimated Location:</strong><br>
+            Latitude: ${estimatedLocation.lat.toFixed(6)}, Longitude: ${estimatedLocation.lon.toFixed(6)}
+          </div>
+        `;
       } else {
-        output.textContent += "\nNot enough valid distances for triangulation.\n";
+        serverContainer.innerHTML += `
+          <div class="results">
+            Not enough servers reachable for triangulation.
+          </div>
+        `;
       }
-    }
+    };
+
+    main();
   </script>
 </body>
 </html>
