@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Latency and Triangulation</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      margin: 20px;
+      padding: 0;
+      background: #f4f4f4;
+    }
+    h1 {
+      text-align: center;
+    }
+    .server-container {
+      max-width: 600px;
+      margin: 20px auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+    .server {
+      margin-bottom: 15px;
+    }
+    .results {
+      background: #e8f5e9;
+      padding: 15px;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Latency and Location Estimation</h1>
+  <div class="server-container" id="server-container">
+    <div id="loading">Measuring latency to servers...</div>
+  </div>
+
+  <h3> This is just from a single time ping we can make multiple ping in a minute and average out the data</h3>
+<a href="Screenshot 2025-01-18 170950 proof.png" target="blank"><h4>Proof</h4></a>
+
+  <script>
+    const SPEED_OF_LIGHT = 200000; // in km/s
+// { name: "IITKGP", host: "1.1.1.1", location: { lat: 37.780, lon: 122.390 } } cloudlare
+    const SERVERS = [
+      // { name: "IITKGP", host: "10.14.96.104", location: { lat: 22.3149, lon: 87.3105 } },
+      // { name: "IIT Bombay", host: "https://10.119.2.10", location: [19.12, 72.91] },
+      // { name: "IIT Madras", host: "https://10.24.0.147", location: [12.9916, 80.2337] },
+      // { name: "Amazon", host: "amazon.com",location: { lat:38.8613, lon:77.054657}},
+      { name: "Google", host: "google.com", location: { lat: 37.390, lon: 122.08 } },
+      { name: "Azure India", host: "microsoft.com", location: { lat: 19.0760, lon: 72.8777 } },
+    ];
+
+    const haversine = (lat1, lon1, lat2, lon2) => {
+      const R = 6371.0; // Earth's radius in km
+      const toRadians = (deg) => (deg * Math.PI) / 180;
+      const dlat = toRadians(lat2 - lat1);
+      const dlon = toRadians(lon2 - lon1);
+      const a =
+        Math.sin(dlat / 2) ** 2 +
+        Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dlon / 2) ** 2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    };
+
+    const calculateDistance = (latencyMs) => {
+      const latencySeconds = latencyMs / 1000 / 2;
+      return latencySeconds * SPEED_OF_LIGHT;
+    };
+
+    const triangulateLocation = (distances) => {
+      let x = 0, y = 0, z = 0, totalWeight = 0;
+
+      distances.forEach((distance, i) => {
+        if (distance > 0) {
+          const { lat, lon } = SERVERS[i].location;
+          const weight = 1 / distance;
+          const latRad = (lat * Math.PI) / 180;
+          const lonRad = (lon * Math.PI) / 180;
+
+          x += Math.cos(latRad) * Math.cos(lonRad) * weight;
+          y += Math.cos(latRad) * Math.sin(lonRad) * weight;
+          z += Math.sin(latRad) * weight;
+          totalWeight += weight;
+        }
+      });
+
+      x /= totalWeight;
+      y /= totalWeight;
+      z /= totalWeight;
+
+      const hyp = Math.sqrt(x ** 2 + y ** 2);
+      const lat = Math.atan2(z, hyp) * (180 / Math.PI);
+      const lon = Math.atan2(y, x) * (180 / Math.PI);
+      return { lat, lon };
+    };
+
+    const measureLatency = async (host) => {
+      const start = performance.now();
+      try {
+        await fetch(`https://${host}`, { method: "HEAD", mode: "no-cors" });
+        const end = performance.now();
+        return end - start;
+      } catch {
+        return null;
+      }
+    };
+
+    const main = async () => {
+      const serverContainer = document.getElementById("server-container");
+      serverContainer.innerHTML = "";
+
+      const distances = await Promise.all(
+        SERVERS.map(async (server) => {
+          const latency = await measureLatency(server.host);
+          if (latency !== null) {
+            const distance = calculateDistance(latency);
+            serverContainer.innerHTML += `
+              <div class="server">
+                <strong>Server:</strong> ${server.name}<br>
+                <strong>Latency:</strong> ${latency.toFixed(2)} ms<br>
+                <strong>Distance:</strong> ${distance.toFixed(2)} km
+              </div>
+            `;
+            return distance;
+          } else {
+            serverContainer.innerHTML += `
+              <div class="server">
+                <strong>Server:</strong> ${server.name}<br>
+                <strong>Latency:</strong> Failed<br>
+                <strong>Distance:</strong> N/A
+              </div>
+            `;
+            return Infinity;
+          }
+        })
+      );
+
+      const reachable = distances.filter((d) => d < Infinity);
+      if (reachable.length >= 2) {
+        const estimatedLocation = triangulateLocation(distances);
+        serverContainer.innerHTML += `
+          <div class="results">
+            <strong>Estimated Location:</strong><br>
+            Latitude: ${estimatedLocation.lat.toFixed(6)}, Longitude: ${estimatedLocation.lon.toFixed(6)}
+          </div>
+        `;
+      } else {
+        serverContainer.innerHTML += `
+          <div class="results">
+            Not enough servers reachable for triangulation.
+          </div>
+        `;
+      }
+    };
+
+    main();
+  </script>
+</body>
+</html>
