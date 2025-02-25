@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Authentication Flowchart</title>
+    <style>
+        .flowchart {
+            font-family: Arial, sans-serif;
+            text-anchor: middle;
+        }
+        .box, .diamond, .oval {
+            fill: #e3e3e3;
+            stroke: #000;
+            stroke-width: 2;
+        }
+        .text {
+            font-size: 14px;
+        }
+        .line {
+            stroke: #000;
+            stroke-width: 2;
+        }
+    </style>
+</head>
+<body>
+    <svg width="500" height="500" class="flowchart">
+        <!-- Start Oval -->
+        <ellipse cx="250" cy="50" rx="80" ry="30" class="oval"></ellipse>
+        <text x="250" y="55" class="text">Start</text>
+
+        <!-- User Enters Credentials Box -->
+        <rect x="170" y="100" width="160" height="40" class="box"></rect>
+        <text x="250" y="125" class="text">User Enters Credentials</text>
+
+        <!-- Validate Credentials Diamond -->
+        <polygon points="250,200 300,250 250,300 200,250" class="diamond"></polygon>
+        <text x="250" y="255" class="text">Validate Credentials</text>
+
+        <!-- Yes/No Decision Text -->
+        <text x="320" y="220" class="text">Yes</text>
+        <text x="180" y="220" class="text">No</text>
+
+        <!-- Are Credentials Valid? Diamond -->
+        <polygon points="250,350 300,400 250,450 200,400" class="diamond"></polygon>
+        <text x="250" y="405" class="text">Are Credentials Valid?</text>
+
+        <!-- Arrows -->
+        <line x1="250" y1="80" x2="250" y2="100" class="line"></line>
+        <line x1="250" y1="140" x2="250" y2="200" class="line"></line>
+        <line x1="300" y1="250" x2="250" y2="350" class="line"></line>
+        <line x1="200" y1="250" x2="250" y2="350" class="line"></line>
+    </svg>
+</body>
+</html>
