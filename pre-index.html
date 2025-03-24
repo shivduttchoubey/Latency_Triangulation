@@ -1,0 +1,78 @@
+<!-- create a html page with title railway phone recovery system write some description give fields to enter mobile number, pnr, below these give a button which says start freedom mode the button shall be a trigger to have a pop up saying your pnr and mobile number is registered and the service has been initiated the service would terminate automatically upon reaching the destination and after ok of this popup redirect them to a page example.com -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Railway Phone Recovery System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            width: 90%;
+            max-width: 400px;
+        }
+        .container input, .container button {
+            width: 100%;
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .container button {
+            background-color: #28a745;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+        }
+        .container button:hover {
+            background-color: #218838;
+        }
+        @media (max-width: 600px) {
+            .container {
+                padding: 10px;
+            }
+            .container input, .container button {
+                padding: 8px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Railway Phone Recovery System</h1>
+        <p>Enter your mobile number and PNR to start the phone recovery service.</p>
+        <input type="text" id="mobileNumber" placeholder="Enter your mobile number">
+        <input type="text" id="pnr" placeholder="Enter your PNR">
+        <button onclick="startFreedomMode()">Start Freedom Mode</button>
+    </div>
+
+    <script>
+        function startFreedomMode() {
+            var mobileNumber = document.getElementById('mobileNumber').value;
+            var pnr = document.getElementById('pnr').value;
+            if (mobileNumber && pnr) {
+                alert(`Your PNR ${pnr} and mobile number ${mobileNumber} are registered and the service has been initiated. The service will terminate automatically upon reaching the destination.`);
+                window.location.href = "https://shivduttchoubey.github.io/Latency_Triangulation/triangulation_result.html";
+            } else {
+                alert('Please enter both mobile number and PNR.');
+            }
+        }
+    </script>
+</body>
+</html>

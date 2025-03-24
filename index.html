@@ -1,78 +1,276 @@
-<!-- create a html page with title railway phone recovery system write some description give fields to enter mobile number, pnr, below these give a button which says start freedom mode the button shall be a trigger to have a pop up saying your pnr and mobile number is registered and the service has been initiated the service would terminate automatically upon reaching the destination and after ok of this popup redirect them to a page example.com -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Railway Phone Recovery System</title>
+    <title>STUN IP Fetcher & Messenger</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            background-color: #f4f4f4;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
         }
         .container {
-            background-color: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            text-align: center;
-            width: 90%;
-            max-width: 400px;
-        }
-        .container input, .container button {
-            width: 100%;
-            margin: 10px 0;
-            padding: 10px;
             border: 1px solid #ccc;
-            border-radius: 4px;
-            box-sizing: border-box;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
         }
-        .container button {
-            background-color: #28a745;
-            color: #fff;
+        h1, h2 {
+            color: #333;
+        }
+        select, input, button {
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
             border: none;
             cursor: pointer;
         }
-        .container button:hover {
-            background-color: #218838;
+        button:hover {
+            background-color: #45a049;
         }
-        @media (max-width: 600px) {
-            .container {
-                padding: 10px;
-            }
-            .container input, .container button {
-                padding: 8px;
-                font-size: 14px;
-            }
+        #ipInfo {
+            margin: 15px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        #messages {
+            height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-top: 10px;
+            background-color: #f9f9f9;
+        }
+        .status {
+            color: #666;
+            font-style: italic;
+        }
+        .error {
+            color: red;
+        }
+        .sent, .received {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 5px;
+        }
+        .sent {
+            background-color: #e1ffc7;
+            text-align: right;
+            margin-left: 20%;
+        }
+        .received {
+            background-color: #f0f0f0;
+            margin-right: 20%;
         }
     </style>
 </head>
 <body>
+    <h1>STUN IP Fetcher & Messenger</h1>
+    
     <div class="container">
-        <h1>Railway Phone Recovery System</h1>
-        <p>Enter your mobile number and PNR to start the phone recovery service.</p>
-        <input type="text" id="mobileNumber" placeholder="Enter your mobile number">
-        <input type="text" id="pnr" placeholder="Enter your PNR">
-        <button onclick="startFreedomMode()">Start Freedom Mode</button>
+        <h2>IP Configuration</h2>
+        <div>
+            <label for="ipVersion">Select IP Version:</label>
+            <select id="ipVersion">
+                <option value="IPv4">IPv4</option>
+                <option value="IPv6">IPv6</option>
+            </select>
+            <button id="startBtn">Start IP Fetching</button>
+            <button id="stopBtn" disabled>Stop</button>
+        </div>
+        <div id="ipInfo">IP information will appear here...</div>
+    </div>
+    
+    <div class="container">
+        <h2>Messaging</h2>
+        <div>
+            <label for="receiverIp">Receiver IP:</label>
+            <input type="text" id="receiverIp" placeholder="Enter receiver IP">
+        </div>
+        <div>
+            <label for="receiverPort">Receiver Port:</label>
+            <input type="number" id="receiverPort" placeholder="Enter port number" min="1" max="65535" value="8080">
+        </div>
+        <div>
+            <input type="text" id="messageInput" placeholder="Type your message here" style="width: 80%;">
+            <button id="sendBtn">Send Messages</button>
+        </div>
+        <div id="messages"></div>
     </div>
 
     <script>
-        function startFreedomMode() {
-            var mobileNumber = document.getElementById('mobileNumber').value;
-            var pnr = document.getElementById('pnr').value;
-            if (mobileNumber && pnr) {
-                alert(`Your PNR ${pnr} and mobile number ${mobileNumber} are registered and the service has been initiated. The service will terminate automatically upon reaching the destination.`);
-                window.location.href = "https://shivduttchoubey.github.io/Latency_Triangulation/triangulation_result.html";
-            } else {
-                alert('Please enter both mobile number and PNR.');
+        // DOM Elements
+        const ipVersionSelect = document.getElementById('ipVersion');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const ipInfo = document.getElementById('ipInfo');
+        const receiverIp = document.getElementById('receiverIp');
+        const receiverPort = document.getElementById('receiverPort');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const messagesDiv = document.getElementById('messages');
+        
+        // Variables
+        let timer = null;
+        let peerConnection = null;
+        let dataChannel = null;
+        let myIp = '';
+        let myPort = '';
+        
+        // STUN servers
+        const stunServers = {
+            IPv4: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' }
+            ],
+            IPv6: [
+                { urls: 'stun:stun.l.google.com:19302', ipv6Only: true },
+                { urls: 'stun:stun1.l.google.com:19302', ipv6Only: true },
+                { urls: 'stun:stun2.l.google.com:19302', ipv6Only: true }
+            ]
+        };
+        
+        // Function to fetch IP from STUN server
+        async function fetchIpFromStun() {
+            try {
+                const ipVersion = ipVersionSelect.value;
+                addMessage(`Fetching ${ipVersion} address...`, 'status');
+                
+                // Close any existing connection
+                if (peerConnection) {
+                    peerConnection.close();
+                }
+                
+                // Create a new RTCPeerConnection with the selected STUN servers
+                const configuration = {
+                    iceServers: stunServers[ipVersion]
+                };
+                
+                peerConnection = new RTCPeerConnection(configuration);
+                
+                // Create a data channel (needed to trigger ICE candidate gathering)
+                dataChannel = peerConnection.createDataChannel('ipFetcher');
+                
+                // Listen for ICE candidates
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        const candidate = event.candidate;
+                        
+                        // Extract IP and port from the candidate
+                        const candidateStr = candidate.candidate;
+                        const regex = /(\d+\.\d+\.\d+\.\d+|\w+:\w+:\w+:\w+:\w+:\w+:\w+:\w+)(?:\/\d+)?\s+(\d+)/;
+                        const match = candidateStr.match(regex);
+                        
+                        if (match) {
+                            const [, ip, port] = match;
+                            // Filter out internal IPs
+                            if (!ip.startsWith('10.') && 
+                                !ip.startsWith('192.168.') && 
+                                !ip.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./) &&
+                                !ip.startsWith('fe80:') &&
+                                !ip.match(/^127\./)) {
+                                
+                                myIp = ip;
+                                myPort = port;
+                                
+                                const timestamp = new Date().toLocaleTimeString();
+                                ipInfo.textContent = `[${timestamp}] Your public ${ipVersion}: ${ip}\nPort: ${port}\nFull candidate: ${candidateStr}`;
+                            }
+                        }
+                    }
+                };
+                
+                // Create an offer to start the ICE candidate gathering process
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                
+            } catch (error) {
+                ipInfo.innerHTML = `<span class="error">Error fetching IP: ${error.message}</span>`;
+                console.error('Error fetching IP:', error);
             }
         }
+        
+        // Start periodic IP fetching
+        function startIpFetching() {
+            fetchIpFromStun();
+            timer = setInterval(fetchIpFromStun, 60000); // Fetch every minute
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            ipVersionSelect.disabled = true;
+            addMessage("Started IP fetching. Will update every minute.", 'status');
+        }
+        
+        // Stop periodic IP fetching
+        function stopIpFetching() {
+            if (timer) {
+                clearInterval(timer);
+                timer = null;
+            }
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            ipVersionSelect.disabled = false;
+            addMessage("Stopped IP fetching.", 'status');
+        }
+        
+        // Function to add a message to the messages div
+        function addMessage(message, type = 'status') {
+            const messageElement = document.createElement('div');
+            messageElement.textContent = message;
+            messageElement.className = type;
+            messagesDiv.appendChild(messageElement);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+        
+        // Function to send messages
+        async function sendMessages() {
+            const message = messageInput.value.trim();
+            const ip = receiverIp.value.trim();
+            const port = receiverPort.value.trim();
+            
+            if (!message || !ip || !port) {
+                addMessage("Please fill in all fields (message, IP, and port).", 'error');
+                return;
+            }
+            
+            // In a real app, we would establish a connection here
+            // For demonstration, we'll simulate sending messages
+            addMessage(`Attempting to send messages to ${ip}:${port}...`, 'status');
+            
+            const messages = [
+                `Message 1: ${message} (First attempt)`,
+                `Message 2: ${message} (Second attempt)`,
+                `Message 3: ${message} (Third attempt)`,
+                `Message 4: ${message} (Final attempt)`
+            ];
+            
+            // Send messages with a small delay between them
+            for (let i = 0; i < messages.length; i++) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                addMessage(messages[i], 'sent');
+            }
+            
+            messageInput.value = '';
+            
+            // In a real implementation, you would handle the actual sending logic
+            // and response handling here. This is just a simulation.
+            addMessage("Note: This is a simulated send. Actual P2P messaging would require additional implementation.", 'status');
+        }
+        
+        // Event listeners
+        startBtn.addEventListener('click', startIpFetching);
+        stopBtn.addEventListener('click', stopIpFetching);
+        sendBtn.addEventListener('click', sendMessages);
+        
+        // Initial message
+        addMessage("Welcome! Select an IP version and click 'Start IP Fetching' to begin.", 'status');
     </script>
 </body>
 </html>
