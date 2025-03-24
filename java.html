@@ -3,18 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Sync Text & Save to File</title>
 </head>
 <body>
-    <p>
-        {
-            "ip": "203.110.247.82",
-            "ipVersion": "IPv4",
-            "timestamp": "2025-03-24T09:53:33.442Z"
-          }
-    </p>
-    <textarea placeholder="Start IP detection first to get your connection info"></textarea>
-    
+    <h2>Enter Text (Phone)</h2>
+    <textarea id="inputText" placeholder="Type here..."></textarea>
+    <button onclick="sendText()">Submit</button>
 
+    <h2>Saved Text (Laptop)</h2>
+    <p id="displayText">Waiting for input...</p>
+
+    <script>
+        function sendText() {
+            const text = document.getElementById("inputText").value;
+            fetch('/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: text })
+            })
+            .then(response => response.text())
+            .then(data => {
+                document.getElementById("displayText").innerText = text;
+            });
+        }
+
+        function fetchLatestText() {
+            fetch('/get')
+                .then(response => response.text())
+                .then(data => {
+                    document.getElementById("displayText").innerText = data || "Waiting for input...";
+                });
+        }
+
+        setInterval(fetchLatestText, 2000);
+    </script>
 </body>
 </html>
