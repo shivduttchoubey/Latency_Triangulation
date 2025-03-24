@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>STUN IP Fetcher & WebSocket Messenger</title>
+    <title>TCP Hole Punching</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
             padding: 20px;
         }
@@ -20,7 +20,7 @@
         h1, h2 {
             color: #333;
         }
-        select, input, button {
+        select, input, button, textarea {
             padding: 8px;
             margin: 5px 0;
             border-radius: 4px;
@@ -43,6 +43,14 @@
             margin: 15px 0;
             font-family: monospace;
             white-space: pre-wrap;
+            background-color: #f8f8f8;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        #connectionInfo {
+            width: 100%;
+            height: 80px;
+            font-family: monospace;
         }
         #messages {
             height: 200px;
@@ -58,6 +66,12 @@
         }
         .error {
             color: red;
+        }
+        .warning {
+            color: orange;
+        }
+        .success {
+            color: green;
         }
         .sent, .received {
             margin: 5px 0;
@@ -86,61 +100,155 @@
         .disconnected {
             background-color: #f44336;
         }
+        .connecting {
+            background-color: #FFC107;
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 10px;
+        }
+        .tab {
+            padding: 8px 16px;
+            border: 1px solid #ccc;
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+            margin-right: 2px;
+            cursor: pointer;
+        }
+        .tab.active {
+            background-color: #f0f0f0;
+            font-weight: bold;
+        }
+        .tab-content {
+            display: none;
+            border: 1px solid #ccc;
+            padding: 15px;
+            border-radius: 0 4px 4px 4px;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .instruction {
+            background-color: #fffde7;
+            padding: 10px;
+            border-left: 4px solid #ffd600;
+            margin-bottom: 15px;
+        }
     </style>
 </head>
 <body>
-    <h1>STUN IP Fetcher & WebSocket Messenger</h1>
+    <h1>TCP Hole Punching</h1>
     
-    <div class="container">
-        <h2>IP Configuration</h2>
-        <div>
-            <label for="ipVersion">Select IP Version:</label>
-            <select id="ipVersion">
-                <option value="IPv4">IPv4</option>
-                <option value="IPv6">IPv6</option>
-            </select>
-            <button id="startBtn">Start IP Fetching</button>
-            <button id="stopBtn" disabled>Stop</button>
-        </div>
-        <div id="ipInfo">IP information will appear here...</div>
+    <div class="instruction">
+        <h3>How to use this application:</h3>
+        <ol>
+            <li>Both peers should run this page in their browsers</li>
+            <li>Each peer selects their preferred IP version and starts IP detection</li>
+            <li>Share your connection info with the other peer physically (copy/paste or QR code)</li>
+            <li>Enter the other peer's connection info</li>
+            <li>Both peers should click "Punch Hole & Connect" at approximately the same time</li>
+            <li>Once connected, you can send messages directly peer-to-peer</li>
+        </ol>
     </div>
     
-    <div class="container">
-        <h2>WebSocket Messaging</h2>
-        <div>
-            <label for="receiverIp">Receiver IP:</label>
-            <input type="text" id="receiverIp" placeholder="Enter receiver IP">
+    <div class="tabs">
+        <div class="tab active" id="tabSetup">Setup</div>
+        <div class="tab" id="tabConnect">Connect</div>
+        <div class="tab" id="tabChat">Chat</div>
+    </div>
+    
+    <div class="tab-content active" id="contentSetup">
+        <div class="container">
+            <h2>1. Detect Your Public IP</h2>
+            <div>
+                <label for="ipVersion">Select IP Version:</label>
+                <select id="ipVersion">
+                    <option value="IPv4">IPv4</option>
+                    <option value="IPv6">IPv6</option>
+                </select>
+                <button id="startBtn">Start IP Detection</button>
+                <button id="stopBtn" disabled>Stop</button>
+            </div>
+            <div id="ipInfo">IP information will appear here...</div>
         </div>
-        <div>
-            <label for="receiverPort">Receiver Port:</label>
-            <input type="number" id="receiverPort" placeholder="Enter port number" min="1" max="65535" value="8080">
+        
+        <div class="container">
+            <h2>2. Share Your Connection Info</h2>
+            <p>Copy this information and physically share it with the other peer:</p>
+            <textarea id="myConnectionInfo" readonly placeholder="Start IP detection first to get your connection info"></textarea>
+            <button id="copyBtn" disabled>Copy to Clipboard</button>
+            <button id="setupNextBtn" disabled>Next: Connect</button>
         </div>
-        <div>
-            <button id="connectBtn">Connect to WebSocket</button>
-            <button id="disconnectBtn" disabled>Disconnect</button>
-            <span id="connectionStatus">
-                <span class="connection-status disconnected"></span>
-                Disconnected
-            </span>
+    </div>
+    
+    <div class="tab-content" id="contentConnect">
+        <div class="container">
+            <h2>3. Enter Other Peer's Connection Info</h2>
+            <textarea id="peerConnectionInfo" placeholder="Paste the other peer's connection info here"></textarea>
+            <div id="peerInfoStatus"></div>
+            
+            <h2>4. Configure Connection Attempts</h2>
+            <div>
+                <label for="localPort">Your local port:</label>
+                <input type="number" id="localPort" value="35000" min="10000" max="65535">
+                <span class="status">(A random available port will be chosen if this one is unavailable)</span>
+            </div>
+            <div>
+                <input type="checkbox" id="attemptMultiplePorts" checked>
+                <label for="attemptMultiplePorts">Try multiple ports around target (recommended)</label>
+            </div>
+            <div>
+                <button id="startPunchingBtn">Punch Hole & Connect</button>
+                <span id="punchingStatus"></span>
+            </div>
         </div>
-        <div>
-            <input type="text" id="messageInput" placeholder="Type your message here" style="width: 80%;" disabled>
-            <button id="sendBtn" disabled>Send Messages</button>
+    </div>
+    
+    <div class="tab-content" id="contentChat">
+        <div class="container">
+            <h2>Peer-to-Peer Chat</h2>
+            <div>
+                <span>Connection Status:</span>
+                <span id="connectionStatus">
+                    <span class="connection-status disconnected"></span>
+                    Disconnected
+                </span>
+                <button id="disconnectBtn" disabled>Disconnect</button>
+            </div>
+            <div id="messages"></div>
+            <div>
+                <input type="text" id="messageInput" placeholder="Type your message here" style="width: 80%;" disabled>
+                <button id="sendBtn" disabled>Send Messages</button>
+            </div>
         </div>
-        <div id="messages"></div>
     </div>
 
     <script>
         // DOM Elements
+        const tabSetup = document.getElementById('tabSetup');
+        const tabConnect = document.getElementById('tabConnect');
+        const tabChat = document.getElementById('tabChat');
+        const contentSetup = document.getElementById('contentSetup');
+        const contentConnect = document.getElementById('contentConnect');
+        const contentChat = document.getElementById('contentChat');
+        
         const ipVersionSelect = document.getElementById('ipVersion');
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
         const ipInfo = document.getElementById('ipInfo');
-        const receiverIp = document.getElementById('receiverIp');
-        const receiverPort = document.getElementById('receiverPort');
-        const connectBtn = document.getElementById('connectBtn');
-        const disconnectBtn = document.getElementById('disconnectBtn');
+        const myConnectionInfo = document.getElementById('myConnectionInfo');
+        const copyBtn = document.getElementById('copyBtn');
+        const setupNextBtn = document.getElementById('setupNextBtn');
+        
+        const peerConnectionInfo = document.getElementById('peerConnectionInfo');
+        const peerInfoStatus = document.getElementById('peerInfoStatus');
+        const localPort = document.getElementById('localPort');
+        const attemptMultiplePorts = document.getElementById('attemptMultiplePorts');
+        const startPunchingBtn = document.getElementById('startPunchingBtn');
+        const punchingStatus = document.getElementById('punchingStatus');
+        
         const connectionStatus = document.getElementById('connectionStatus');
+        const disconnectBtn = document.getElementById('disconnectBtn');
         const messageInput = document.getElementById('messageInput');
         const sendBtn = document.getElementById('sendBtn');
         const messagesDiv = document.getElementById('messages');
@@ -151,6 +259,8 @@
         let myIp = '';
         let myPort = '';
         let socket = null;
+        let connectionAttempts = [];
+        let peerData = null;
         
         // STUN servers
         const stunServers = {
@@ -165,6 +275,27 @@
                 { urls: 'stun:stun2.l.google.com:19302', ipv6Only: true }
             ]
         };
+        
+        // Tab switching
+        function switchTab(tabElement, contentElement) {
+            // Deactivate all tabs
+            tabSetup.classList.remove('active');
+            tabConnect.classList.remove('active');
+            tabChat.classList.remove('active');
+            contentSetup.classList.remove('active');
+            contentConnect.classList.remove('active');
+            contentChat.classList.remove('active');
+            
+            // Activate the selected tab
+            tabElement.classList.add('active');
+            contentElement.classList.add('active');
+        }
+        
+        // Tab event listeners
+        tabSetup.addEventListener('click', () => switchTab(tabSetup, contentSetup));
+        tabConnect.addEventListener('click', () => switchTab(tabConnect, contentConnect));
+        tabChat.addEventListener('click', () => switchTab(tabChat, contentChat));
+        setupNextBtn.addEventListener('click', () => switchTab(tabConnect, contentConnect));
         
         // Function to fetch IP from STUN server
         async function fetchIpFromStun() {
@@ -211,6 +342,9 @@
                                 
                                 const timestamp = new Date().toLocaleTimeString();
                                 ipInfo.textContent = `[${timestamp}] Your public ${ipVersion}: ${ip}\nPort: ${port}\nFull candidate: ${candidateStr}`;
+                                
+                                // Update connection info
+                                updateMyConnectionInfo();
                             }
                         }
                     }
@@ -223,6 +357,21 @@
             } catch (error) {
                 ipInfo.innerHTML = `<span class="error">Error fetching IP: ${error.message}</span>`;
                 console.error('Error fetching IP:', error);
+            }
+        }
+        
+        // Update connection info for sharing
+        function updateMyConnectionInfo() {
+            if (myIp && myPort) {
+                const connectionData = {
+                    ip: myIp,
+                    ipVersion: ipVersionSelect.value,
+                    timestamp: new Date().toISOString()
+                };
+                
+                myConnectionInfo.value = JSON.stringify(connectionData, null, 2);
+                copyBtn.disabled = false;
+                setupNextBtn.disabled = false;
             }
         }
         
@@ -248,55 +397,205 @@
             addMessage("Stopped IP fetching.", 'status');
         }
         
-        // Connect to WebSocket
-        function connectWebSocket() {
-            const ip = receiverIp.value.trim();
-            const port = receiverPort.value.trim();
-            
-            if (!ip || !port) {
-                addMessage("Please enter receiver IP and port.", 'error');
-                return;
-            }
-            
+        // Copy connection info to clipboard
+        function copyToClipboard() {
+            myConnectionInfo.select();
+            document.execCommand('copy');
+            addMessage("Connection info copied to clipboard!", 'success');
+        }
+        
+        // Parse peer connection info
+        function parsePeerInfo() {
             try {
-                // Create WebSocket connection
-                const wsUrl = `ws://${ip}:${port}`;
-                socket = new WebSocket(wsUrl);
+                const infoText = peerConnectionInfo.value.trim();
+                if (!infoText) {
+                    peerInfoStatus.innerHTML = '<span class="error">Please enter the other peer\'s connection info</span>';
+                    return null;
+                }
                 
-                // Connection opened
-                socket.addEventListener('open', (event) => {
-                    setConnectionStatus(true);
-                    addMessage(`Connected to ${wsUrl}`, 'status');
-                });
+                const data = JSON.parse(infoText);
+                if (!data.ip) {
+                    peerInfoStatus.innerHTML = '<span class="error">Invalid connection info: Missing IP address</span>';
+                    return null;
+                }
                 
-                // Listen for messages
-                socket.addEventListener('message', (event) => {
-                    addMessage(event.data, 'received');
-                });
-                
-                // Connection closed
-                socket.addEventListener('close', (event) => {
-                    setConnectionStatus(false);
-                    addMessage(`Disconnected from server. Code: ${event.code}`, 'status');
-                });
-                
-                // Connection error
-                socket.addEventListener('error', (event) => {
-                    setConnectionStatus(false);
-                    addMessage(`WebSocket error occurred. Try checking the IP and port.`, 'error');
-                    console.error('WebSocket error:', event);
-                });
-                
-                // Update UI
-                connectBtn.disabled = true;
-                disconnectBtn.disabled = false;
-                receiverIp.disabled = true;
-                receiverPort.disabled = true;
-                
+                peerInfoStatus.innerHTML = '<span class="success">Connection info parsed successfully</span>';
+                peerData = data;
+                return data;
             } catch (error) {
-                addMessage(`Error connecting to WebSocket: ${error.message}`, 'error');
-                console.error('Error connecting to WebSocket:', error);
+                peerInfoStatus.innerHTML = `<span class="error">Invalid JSON: ${error.message}</span>`;
+                return null;
             }
+        }
+        
+        // Generate an array of ports to try (around the peer's detected port)
+        function getPortsToTry(basePort) {
+            const ports = [parseInt(localPort.value)]; // Start with user specified port
+            
+            // If multiple ports option is checked, add more ports to try
+            if (attemptMultiplePorts.checked) {
+                // Try a range of ports
+                for (let i = 1; i <= 5; i++) {
+                    ports.push(ports[0] + i);
+                    ports.push(ports[0] - i);
+                }
+            }
+            
+            return ports.filter(port => port >= 1024 && port <= 65535);
+        }
+        
+        // Attempt TCP hole punching
+        async function startHolePunching() {
+            const peerInfo = parsePeerInfo();
+            if (!peerInfo) return;
+            
+            const peerIp = peerInfo.ip;
+            const portsToTry = getPortsToTry(parseInt(localPort.value));
+            
+            setConnectionStatus('connecting');
+            punchingStatus.innerHTML = '<span class="status">Attempting to connect...</span>';
+            startPunchingBtn.disabled = true;
+            
+            addMessage(`Starting TCP hole punching to ${peerIp}`, 'status');
+            addMessage(`Trying multiple connection strategies:`, 'status');
+            addMessage(`1. WebSocket direct connection`, 'status');
+            
+            // Try to connect directly via WebSocket
+            let connected = false;
+            let wsAttempt;
+            
+            for (const port of portsToTry) {
+                if (connected) break;
+                
+                addMessage(`Attempting WebSocket connection to ${peerIp}:${port}...`, 'status');
+                
+                try {
+                    wsAttempt = new WebSocket(`ws://${peerIp}:${port}`);
+                    
+                    // Promise wrapper for WebSocket connection
+                    await new Promise((resolve, reject) => {
+                        const timeout = setTimeout(() => {
+                            reject(new Error("Connection attempt timed out"));
+                        }, 5000);
+                        
+                        wsAttempt.onopen = () => {
+                            clearTimeout(timeout);
+                            connected = true;
+                            socket = wsAttempt;
+                            setupWebSocketHandlers(socket);
+                            resolve();
+                        };
+                        
+                        wsAttempt.onerror = (event) => {
+                            clearTimeout(timeout);
+                            reject(new Error("Connection failed"));
+                        };
+                    });
+                    
+                    if (connected) {
+                        addMessage(`Successfully connected to ${peerIp}:${port}!`, 'success');
+                        break;
+                    }
+                    
+                } catch (error) {
+                    addMessage(`Connection to ${peerIp}:${port} failed: ${error.message}`, 'status');
+                    if (wsAttempt && wsAttempt.readyState !== WebSocket.CLOSED) {
+                        wsAttempt.close();
+                    }
+                }
+                
+                // Short delay between attempts
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+            
+            if (!connected) {
+                // Fallback to acting as a server
+                addMessage(`Direct connection failed. Trying to listen for incoming connections...`, 'status');
+                
+                try {
+                    // Create a server using the first available port
+                    for (const port of portsToTry) {
+                        try {
+                            const serverUrl = `ws://0.0.0.0:${port}`;
+                            addMessage(`Attempting to listen on ${port}...`, 'status');
+                            
+                            // Note: In a real browser implementation, we can't create WebSocket servers
+                            // This is a simulation of what would happen in a complete implementation
+                            addMessage(`Browser limitation: Cannot create WebSocket servers directly.`, 'warning');
+                            addMessage(`In a complete implementation, this would start a server now.`, 'warning');
+                            
+                            // Simulate waiting for connection
+                            await new Promise(resolve => setTimeout(resolve, 3000));
+                            
+                            // For demonstration purposes, we'll assume connection failed
+                            throw new Error("Browser cannot create WebSocket servers");
+                        } catch (error) {
+                            addMessage(`Listening on port ${port} failed: ${error.message}`, 'status');
+                        }
+                    }
+                } catch (error) {
+                    addMessage(`Error creating server: ${error.message}`, 'error');
+                }
+                
+                punchingStatus.innerHTML = '<span class="error">Connection failed. Try again or check connection info.</span>';
+                startPunchingBtn.disabled = false;
+                setConnectionStatus('disconnected');
+                
+                addMessage(`TCP hole punching failed.`, 'error');
+                addMessage(`Possible reasons:`, 'status');
+                addMessage(`- One or both peers are behind symmetric NATs`, 'status');
+                addMessage(`- Firewalls are blocking the connection`, 'status');
+                addMessage(`- The connection info is incorrect or outdated`, 'status');
+            } else {
+                // Connection successful
+                punchingStatus.innerHTML = '<span class="success">Connected successfully!</span>';
+                switchTab(tabChat, contentChat);
+                setConnectionStatus('connected');
+            }
+        }
+        
+        // Setup WebSocket event handlers
+        function setupWebSocketHandlers(ws) {
+            // Connection opened
+            ws.addEventListener('open', (event) => {
+                setConnectionStatus('connected');
+                addMessage(`Connection established!`, 'success');
+                
+                // Send a hello message
+                ws.send(JSON.stringify({
+                    type: 'hello',
+                    message: 'Connection established successfully!'
+                }));
+            });
+            
+            // Listen for messages
+            ws.addEventListener('message', (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'message') {
+                        addMessage(data.content, 'received');
+                    } else if (data.type === 'hello') {
+                        addMessage(data.message, 'received');
+                    }
+                } catch (error) {
+                    // If not JSON, treat as plain text
+                    addMessage(event.data, 'received');
+                }
+            });
+            
+            // Connection closed
+            ws.addEventListener('close', (event) => {
+                setConnectionStatus('disconnected');
+                addMessage(`Connection closed. Code: ${event.code}`, 'status');
+                socket = null;
+            });
+            
+            // Connection error
+            ws.addEventListener('error', (event) => {
+                setConnectionStatus('disconnected');
+                addMessage(`WebSocket error occurred.`, 'error');
+                console.error('WebSocket error:', event);
+            });
         }
         
         // Disconnect WebSocket
@@ -306,32 +605,32 @@
                 socket = null;
             }
             
-            // Update UI
-            connectBtn.disabled = false;
-            disconnectBtn.disabled = true;
-            receiverIp.disabled = false;
-            receiverPort.disabled = false;
-            messageInput.disabled = true;
-            sendBtn.disabled = true;
-            
-            setConnectionStatus(false);
+            setConnectionStatus('disconnected');
         }
         
         // Update connection status UI
-        function setConnectionStatus(isConnected) {
+        function setConnectionStatus(status) {
             const statusDot = connectionStatus.querySelector('.connection-status');
             const statusText = connectionStatus.childNodes[2];
             
-            if (isConnected) {
+            if (status === 'connected') {
                 statusDot.className = 'connection-status connected';
                 statusText.nodeValue = ' Connected';
                 messageInput.disabled = false;
                 sendBtn.disabled = false;
+                disconnectBtn.disabled = false;
+            } else if (status === 'connecting') {
+                statusDot.className = 'connection-status connecting';
+                statusText.nodeValue = ' Connecting...';
+                messageInput.disabled = true;
+                sendBtn.disabled = true;
+                disconnectBtn.disabled = true;
             } else {
                 statusDot.className = 'connection-status disconnected';
                 statusText.nodeValue = ' Disconnected';
                 messageInput.disabled = true;
                 sendBtn.disabled = true;
+                disconnectBtn.disabled = true;
             }
         }
         
@@ -347,7 +646,7 @@
         // Function to send messages
         async function sendMessages() {
             if (!socket || socket.readyState !== WebSocket.OPEN) {
-                addMessage("Not connected to WebSocket server.", 'error');
+                addMessage("Not connected.", 'error');
                 return;
             }
             
@@ -368,7 +667,10 @@
             
             for (let i = 0; i < messages.length; i++) {
                 try {
-                    socket.send(messages[i]);
+                    socket.send(JSON.stringify({
+                        type: 'message',
+                        content: messages[i]
+                    }));
                     addMessage(messages[i], 'sent');
                     await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms between messages
                 } catch (error) {
@@ -383,7 +685,9 @@
         // Event listeners
         startBtn.addEventListener('click', startIpFetching);
         stopBtn.addEventListener('click', stopIpFetching);
-        connectBtn.addEventListener('click', connectWebSocket);
+        copyBtn.addEventListener('click', copyToClipboard);
+        peerConnectionInfo.addEventListener('input', parsePeerInfo);
+        startPunchingBtn.addEventListener('click', startHolePunching);
         disconnectBtn.addEventListener('click', disconnectWebSocket);
         sendBtn.addEventListener('click', sendMessages);
         
@@ -395,8 +699,8 @@
         });
         
         // Initial message
-        addMessage("Welcome! Select an IP version and click 'Start IP Fetching' to begin.", 'status');
-        addMessage("To send messages, enter the receiver's IP and port, then click 'Connect to WebSocket'.", 'status');
+        addMessage("Welcome to the TCP Hole Punching application!", 'status');
+        addMessage("Follow the steps in each tab to establish a P2P connection.", 'status');
     </script>
 </body>
 </html>

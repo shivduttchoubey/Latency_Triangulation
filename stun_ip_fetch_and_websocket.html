@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STUN IP Fetcher & WebSocket Messenger</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            border: 1px solid #ccc;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        select, input, button {
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #ipInfo {
+            margin: 15px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        #messages {
+            height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-top: 10px;
+            background-color: #f9f9f9;
+        }
+        .status {
+            color: #666;
+            font-style: italic;
+        }
+        .error {
+            color: red;
+        }
+        .sent, .received {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 5px;
+        }
+        .sent {
+            background-color: #e1ffc7;
+            text-align: right;
+            margin-left: 20%;
+        }
+        .received {
+            background-color: #f0f0f0;
+            margin-right: 20%;
+        }
+        .connection-status {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .connected {
+            background-color: #4CAF50;
+        }
+        .disconnected {
+            background-color: #f44336;
+        }
+    </style>
+</head>
+<body>
+    <h1>STUN IP Fetcher & WebSocket Messenger</h1>
+    
+    <div class="container">
+        <h2>IP Configuration</h2>
+        <div>
+            <label for="ipVersion">Select IP Version:</label>
+            <select id="ipVersion">
+                <option value="IPv4">IPv4</option>
+                <option value="IPv6">IPv6</option>
+            </select>
+            <button id="startBtn">Start IP Fetching</button>
+            <button id="stopBtn" disabled>Stop</button>
+        </div>
+        <div id="ipInfo">IP information will appear here...</div>
+    </div>
+    
+    <div class="container">
+        <h2>WebSocket Messaging</h2>
+        <div>
+            <label for="receiverIp">Receiver IP:</label>
+            <input type="text" id="receiverIp" placeholder="Enter receiver IP">
+        </div>
+        <div>
+            <label for="receiverPort">Receiver Port:</label>
+            <input type="number" id="receiverPort" placeholder="Enter port number" min="1" max="65535" value="8080">
+        </div>
+        <div>
+            <button id="connectBtn">Connect to WebSocket</button>
+            <button id="disconnectBtn" disabled>Disconnect</button>
+            <span id="connectionStatus">
+                <span class="connection-status disconnected"></span>
+                Disconnected
+            </span>
+        </div>
+        <div>
+            <input type="text" id="messageInput" placeholder="Type your message here" style="width: 80%;" disabled>
+            <button id="sendBtn" disabled>Send Messages</button>
+        </div>
+        <div id="messages"></div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const ipVersionSelect = document.getElementById('ipVersion');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const ipInfo = document.getElementById('ipInfo');
+        const receiverIp = document.getElementById('receiverIp');
+        const receiverPort = document.getElementById('receiverPort');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const messagesDiv = document.getElementById('messages');
+        
+        // Variables
+        let timer = null;
+        let peerConnection = null;
+        let myIp = '';
+        let myPort = '';
+        let socket = null;
+        
+        // STUN servers
+        const stunServers = {
+            IPv4: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' }
+            ],
+            IPv6: [
+                { urls: 'stun:stun.l.google.com:19302', ipv6Only: true },
+                { urls: 'stun:stun1.l.google.com:19302', ipv6Only: true },
+                { urls: 'stun:stun2.l.google.com:19302', ipv6Only: true }
+            ]
+        };
+        
+        // Function to fetch IP from STUN server
+        async function fetchIpFromStun() {
+            try {
+                const ipVersion = ipVersionSelect.value;
+                addMessage(`Fetching ${ipVersion} address...`, 'status');
+                
+                // Close any existing connection
+                if (peerConnection) {
+                    peerConnection.close();
+                }
+                
+                // Create a new RTCPeerConnection with the selected STUN servers
+                const configuration = {
+                    iceServers: stunServers[ipVersion]
+                };
+                
+                peerConnection = new RTCPeerConnection(configuration);
+                
+                // Create a data channel (needed to trigger ICE candidate gathering)
+                const dataChannel = peerConnection.createDataChannel('ipFetcher');
+                
+                // Listen for ICE candidates
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        const candidate = event.candidate;
+                        
+                        // Extract IP and port from the candidate
+                        const candidateStr = candidate.candidate;
+                        const regex = /(\d+\.\d+\.\d+\.\d+|\w+:\w+:\w+:\w+:\w+:\w+:\w+:\w+)(?:\/\d+)?\s+(\d+)/;
+                        const match = candidateStr.match(regex);
+                        
+                        if (match) {
+                            const [, ip, port] = match;
+                            // Filter out internal IPs
+                            if (!ip.startsWith('10.') && 
+                                !ip.startsWith('192.168.') && 
+                                !ip.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./) &&
+                                !ip.startsWith('fe80:') &&
+                                !ip.match(/^127\./)) {
+                                
+                                myIp = ip;
+                                myPort = port;
+                                
+                                const timestamp = new Date().toLocaleTimeString();
+                                ipInfo.textContent = `[${timestamp}] Your public ${ipVersion}: ${ip}\nPort: ${port}\nFull candidate: ${candidateStr}`;
+                            }
+                        }
+                    }
+                };
+                
+                // Create an offer to start the ICE candidate gathering process
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                
+            } catch (error) {
+                ipInfo.innerHTML = `<span class="error">Error fetching IP: ${error.message}</span>`;
+                console.error('Error fetching IP:', error);
+            }
+        }
+        
+        // Start periodic IP fetching
+        function startIpFetching() {
+            fetchIpFromStun();
+            timer = setInterval(fetchIpFromStun, 60000); // Fetch every minute
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            ipVersionSelect.disabled = true;
+            addMessage("Started IP fetching. Will update every minute.", 'status');
+        }
+        
+        // Stop periodic IP fetching
+        function stopIpFetching() {
+            if (timer) {
+                clearInterval(timer);
+                timer = null;
+            }
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            ipVersionSelect.disabled = false;
+            addMessage("Stopped IP fetching.", 'status');
+        }
+        
+        // Connect to WebSocket
+        function connectWebSocket() {
+            const ip = receiverIp.value.trim();
+            const port = receiverPort.value.trim();
+            
+            if (!ip || !port) {
+                addMessage("Please enter receiver IP and port.", 'error');
+                return;
+            }
+            
+            try {
+                // Create WebSocket connection
+                const wsUrl = `ws://${ip}:${port}`;
+                socket = new WebSocket(wsUrl);
+                
+                // Connection opened
+                socket.addEventListener('open', (event) => {
+                    setConnectionStatus(true);
+                    addMessage(`Connected to ${wsUrl}`, 'status');
+                });
+                
+                // Listen for messages
+                socket.addEventListener('message', (event) => {
+                    addMessage(event.data, 'received');
+                });
+                
+                // Connection closed
+                socket.addEventListener('close', (event) => {
+                    setConnectionStatus(false);
+                    addMessage(`Disconnected from server. Code: ${event.code}`, 'status');
+                });
+                
+                // Connection error
+                socket.addEventListener('error', (event) => {
+                    setConnectionStatus(false);
+                    addMessage(`WebSocket error occurred. Try checking the IP and port.`, 'error');
+                    console.error('WebSocket error:', event);
+                });
+                
+                // Update UI
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                receiverIp.disabled = true;
+                receiverPort.disabled = true;
+                
+            } catch (error) {
+                addMessage(`Error connecting to WebSocket: ${error.message}`, 'error');
+                console.error('Error connecting to WebSocket:', error);
+            }
+        }
+        
+        // Disconnect WebSocket
+        function disconnectWebSocket() {
+            if (socket) {
+                socket.close();
+                socket = null;
+            }
+            
+            // Update UI
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+            receiverIp.disabled = false;
+            receiverPort.disabled = false;
+            messageInput.disabled = true;
+            sendBtn.disabled = true;
+            
+            setConnectionStatus(false);
+        }
+        
+        // Update connection status UI
+        function setConnectionStatus(isConnected) {
+            const statusDot = connectionStatus.querySelector('.connection-status');
+            const statusText = connectionStatus.childNodes[2];
+            
+            if (isConnected) {
+                statusDot.className = 'connection-status connected';
+                statusText.nodeValue = ' Connected';
+                messageInput.disabled = false;
+                sendBtn.disabled = false;
+            } else {
+                statusDot.className = 'connection-status disconnected';
+                statusText.nodeValue = ' Disconnected';
+                messageInput.disabled = true;
+                sendBtn.disabled = true;
+            }
+        }
+        
+        // Function to add a message to the messages div
+        function addMessage(message, type = 'status') {
+            const messageElement = document.createElement('div');
+            messageElement.textContent = message;
+            messageElement.className = type;
+            messagesDiv.appendChild(messageElement);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+        
+        // Function to send messages
+        async function sendMessages() {
+            if (!socket || socket.readyState !== WebSocket.OPEN) {
+                addMessage("Not connected to WebSocket server.", 'error');
+                return;
+            }
+            
+            const message = messageInput.value.trim();
+            
+            if (!message) {
+                addMessage("Please enter a message to send.", 'error');
+                return;
+            }
+            
+            // Send 4 messages sequentially with small delays between them
+            const messages = [
+                `Message 1: ${message} (First attempt)`,
+                `Message 2: ${message} (Second attempt)`,
+                `Message 3: ${message} (Third attempt)`,
+                `Message 4: ${message} (Final attempt)`
+            ];
+            
+            for (let i = 0; i < messages.length; i++) {
+                try {
+                    socket.send(messages[i]);
+                    addMessage(messages[i], 'sent');
+                    await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms between messages
+                } catch (error) {
+                    addMessage(`Failed to send message: ${error.message}`, 'error');
+                    break;
+                }
+            }
+            
+            messageInput.value = '';
+        }
+        
+        // Event listeners
+        startBtn.addEventListener('click', startIpFetching);
+        stopBtn.addEventListener('click', stopIpFetching);
+        connectBtn.addEventListener('click', connectWebSocket);
+        disconnectBtn.addEventListener('click', disconnectWebSocket);
+        sendBtn.addEventListener('click', sendMessages);
+        
+        // Allow Enter key to send messages
+        messageInput.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') {
+                sendMessages();
+            }
+        });
+        
+        // Initial message
+        addMessage("Welcome! Select an IP version and click 'Start IP Fetching' to begin.", 'status');
+        addMessage("To send messages, enter the receiver's IP and port, then click 'Connect to WebSocket'.", 'status');
+    </script>
+</body>
+</html>
